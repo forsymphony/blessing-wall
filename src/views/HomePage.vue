@@ -4,7 +4,6 @@ import { ElTabs, ElTabPane, ElMessage } from 'element-plus'
 import BlessingCard from '../components/BlessingCard.vue'
 import StatsPanel from '../components/StatsPanel.vue'
 import { blessings } from '../data/blessings'
-import { sendBlessing, getAllStats } from '../api/esa'
 import type { BlessingStats } from '../types/blessing'
 
 // 当前 Tab
@@ -19,7 +18,22 @@ const loading = ref(false)
 // 获取统计数据
 async function fetchStats() {
   try {
-    stats.value = await getAllStats()
+    const results = await Promise.all(
+      [1, 2, 3, 4, 5, 6, 7, 8].map(async (num) => {
+        const [totalRes, todayRes] = await Promise.all([
+          fetch(`/total${num}`),
+          fetch(`/today${num}`)
+        ])
+        const totalCount = parseInt(await totalRes.text()) || 0
+        const todayCount = parseInt(await todayRes.text()) || 0
+        return {
+          id: `blessing_${num}`,
+          totalCount,
+          todayCount
+        }
+      })
+    )
+    stats.value = results
   } catch (error) {
     console.error('获取统计失败:', error)
   }
@@ -28,26 +42,34 @@ async function fetchStats() {
 // 处理祝福点击
 async function handleBless(id: string) {
   try {
-    const result = await sendBlessing(id)
+    // 从 blessing_1 提取序号 1
+    const num = id.replace('blessing_', '')
     
-    if (result.success) {
-      // 更新本地统计数据
-      const statIndex = stats.value.findIndex(s => s.id === id)
-      if (statIndex !== -1) {
-        stats.value[statIndex].totalCount = result.totalCount
-        stats.value[statIndex].todayCount = result.todayCount
-      }
-      
-      // 找到祝福文本
-      const blessing = blessings.find(b => b.id === id)
-      
-      ElMessage({
-        message: `已送出祝福：${blessing?.text}`,
-        type: 'success',
-        duration: 2000,
-        showClose: true
-      })
+    // 同时增加总计和今日计数
+    const [totalRes, todayRes] = await Promise.all([
+      fetch(`/total${num}`, { method: 'POST' }),
+      fetch(`/today${num}`, { method: 'POST' })
+    ])
+    
+    const totalCount = parseInt(await totalRes.text()) || 0
+    const todayCount = parseInt(await todayRes.text()) || 0
+    
+    // 更新本地统计数据
+    const statIndex = stats.value.findIndex(s => s.id === id)
+    if (statIndex !== -1) {
+      stats.value[statIndex].totalCount = totalCount
+      stats.value[statIndex].todayCount = todayCount
     }
+    
+    // 找到祝福文本
+    const blessing = blessings.find(b => b.id === id)
+    
+    ElMessage({
+      message: `已送出祝福：${blessing?.text}`,
+      type: 'success',
+      duration: 2000,
+      showClose: true
+    })
   } catch (error) {
     ElMessage({
       message: '祝福发送失败，请稍后重试',
@@ -341,4 +363,3 @@ onMounted(async () => {
   }
 }
 </style>
-
