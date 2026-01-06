@@ -15,6 +15,10 @@ const stats = ref<BlessingStats[]>([])
 // 加载状态
 const loading = ref(false)
 
+// 点击冷却记录（3秒内同一祝福只能点击一次）
+const lastClickTime = ref<Record<string, number>>({})
+const CLICK_COOLDOWN = 3000 // 3秒
+
 // 获取统计数据
 async function fetchStats() {
   try {
@@ -41,6 +45,21 @@ async function fetchStats() {
 
 // 处理祝福点击
 async function handleBless(id: string) {
+  // 检查冷却时间
+  const now = Date.now()
+  const lastTime = lastClickTime.value[id] || 0
+  if (now - lastTime < CLICK_COOLDOWN) {
+    ElMessage({
+      message: `祝福冷却中，请稍后再试`,
+      type: 'warning',
+      duration: 1500
+    })
+    return
+  }
+  
+  // 记录点击时间
+  lastClickTime.value[id] = now
+  
   try {
     // 从 blessing_1 提取序号 1
     const num = id.replace('blessing_', '')
